@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - `*` segment in filter body paths to match against every element of an array, e.g. `data.assignees.*.id`.
+- Signature verification for PagerDuty (`pagerduty` verifier), accepting any of the signatures sent during a secret rotation.
 
 ## [0.1.0] - 2026-06-29
 
