@@ -31,11 +31,12 @@ type Registry struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		verifiers: map[string]Verifier{
-			"stripe":  Stripe{},
-			"github":  GitHub{},
-			"shopify": Shopify{},
-			"slack":   Slack{},
-			"linear":  Linear{},
+			"stripe":    Stripe{},
+			"github":    GitHub{},
+			"shopify":   Shopify{},
+			"slack":     Slack{},
+			"linear":    Linear{},
+			"pagerduty": PagerDuty{},
 		},
 	}
 }

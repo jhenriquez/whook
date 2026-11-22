@@ -109,6 +109,26 @@ func (Linear) Verify(secret []byte, req Request) error {
 	return nil
 }
 
+// PagerDuty verifies the X-PagerDuty-Signature header, a comma-separated list
+// of signatures, each "v1=" followed by the hex HMAC-SHA256 of the raw body
+// keyed by the webhook subscription secret. More than one is sent while a
+// secret is being rotated, so the request is accepted if any of them matches.
+type PagerDuty struct{}
+
+func (PagerDuty) Verify(secret []byte, req Request) error {
+	sig := header(req.Headers, "X-PagerDuty-Signature")
+	for part := range strings.SplitSeq(sig, ",") {
+		hexSig, ok := strings.CutPrefix(strings.TrimSpace(part), "v1=")
+		if !ok || hexSig == "" {
+			continue
+		}
+		if hmacEqual(secret, req.Body, hexSig) {
+			return nil
+		}
+	}
+	return ErrInvalid
+}
+
 // hmacEqual reports whether the hex-encoded HMAC-SHA256 of message under key
 // equals wantHex, using a constant-time comparison.
 func hmacEqual(key, message []byte, wantHex string) bool {
