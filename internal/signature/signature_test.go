@@ -178,8 +178,58 @@ func TestLinearVerify(t *testing.T) {
 	}
 }
 
+func TestPagerDutyVerify(t *testing.T) {
+	secret := []byte("pd_wh_secret")
+	body := []byte(`{"event":{"event_type":"incident.triggered"}}`)
+	good := "v1=" + hmacHex(secret, body)
+	// A signature made with the previous secret, as sent during a rotation.
+	stale := "v1=" + hmacHex([]byte("pd_old_secret"), body)
+
+	tests := []struct {
+		name    string
+		sig     string
+		body    []byte
+		wantErr bool
+	}{
+		{name: "valid signature", sig: good, body: body},
+		{name: "modified body rejected", sig: good, body: []byte(`{"event":{"event_type":"incident.resolved"}}`), wantErr: true},
+		{name: "missing header rejected", sig: "", body: body, wantErr: true},
+		{name: "missing version prefix rejected", sig: hmacHex(secret, body), body: body, wantErr: true},
+		{name: "unknown version rejected", sig: "v0=" + hmacHex(secret, body), body: body, wantErr: true},
+		{name: "malformed hex rejected", sig: "v1=zzzz", body: body, wantErr: true},
+		{name: "empty digest rejected", sig: "v1=", body: body, wantErr: true},
+		{name: "rotation: first of two matches", sig: good + "," + stale, body: body},
+		{name: "rotation: second of two matches", sig: stale + "," + good, body: body},
+		{name: "rotation: none match rejected", sig: stale + "," + stale, body: body, wantErr: true},
+		{name: "space after separator tolerated", sig: stale + ", " + good, body: body},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := map[string][]string{}
+			if tt.sig != "" {
+				headers["X-PagerDuty-Signature"] = []string{tt.sig}
+			}
+			err := signature.PagerDuty{}.Verify(secret, signature.Request{Headers: headers, Body: tt.body})
+			assertErr(t, err, tt.wantErr)
+		})
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	reg := signature.NewRegistry()
+
+	t.Run("pagerduty is built in", func(t *testing.T) {
+		secret := []byte("pd_wh_secret")
+		body := []byte(`{"event":{}}`)
+		req := signature.Request{
+			Headers: map[string][]string{"X-PagerDuty-Signature": {"v1=" + hmacHex(secret, body)}},
+			Body:    body,
+		}
+		if err := reg.Verify("pagerduty", secret, req); err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+	})
 
 	t.Run("empty provider accepts", func(t *testing.T) {
 		if err := reg.Verify("", nil, signature.Request{}); err != nil {
